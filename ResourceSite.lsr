@@ -1,1 +1,37 @@
+# === 玩偶 / 木偶 ===
+DOMAIN-SUFFIX,wogg.xxooo.cf
+DOMAIN-SUFFIX,666.666291.xyz
+DOMAIN-SUFFIX,muou.site
+DOMAIN-SUFFIX,muou.asia
 
+# === 蜡笔 ===
+DOMAIN-SUFFIX,xiaocgege.shop
+DOMAIN-SUFFIX,fmao.shop
+DOMAIN-SUFFIX,xiaocge.fun
+
+# === 闪电 ===
+DOMAIN-SUFFIX,sd.sduc.site
+
+# === 至臻 ===
+DOMAIN-SUFFIX,miqk.cc
+
+# === 多多 ===
+DOMAIN-SUFFIX,yydsys.cc
+
+# === 欧哥 ===
+DOMAIN-SUFFIX,woog.nxog.eu.org
+
+# === 二小 ===
+DOMAIN-SUFFIX,2xiaopan.top
+
+# === 新增替换（虎斑 / 小斑）===
+DOMAIN-SUFFIX,xhban.xyz
+DOMAIN-SUFFIX,xsayang.fun
+
+# === 兜底关键词（防换域名）===
+DOMAIN-KEYWORD,muou
+DOMAIN-KEYWORD,xiaocge
+DOMAIN-KEYWORD,yydsys
+DOMAIN-KEYWORD,xiaopan
+DOMAIN-KEYWORD,xhban
+DOMAIN-KEYWORD,xsayang

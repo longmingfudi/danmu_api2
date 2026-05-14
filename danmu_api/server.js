@@ -9,6 +9,8 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import dotenv from 'dotenv';
 import { Request as NodeFetchRequest } from 'node-fetch';
 import { handleRequest } from './worker.js';
+import { Globals } from './configs/globals.js';
+import { clearBangumiDataCache, initBangumiData } from './utils/bangumi-data-util.js';
 
 // =====================
 // server.js - 本地node智能启动脚本：根据 Node.js 环境自动选择最优启动模式
@@ -39,6 +41,13 @@ checkAndCopyConfigFiles();
 
 // 初始加载
 loadEnv();
+
+function detectNodeDeployPlatform() {
+  if (process.env.SPACE_ID) {
+    return "huggingface";
+  }
+  return "node";
+}
 
 /**
  * 检查并自动复制配置文件
@@ -186,6 +195,12 @@ async function setupEnvWatcher() {
 
           console.log('[server] Environment variables reloaded successfully');
           console.log('[server] Updated keys:', Array.from(newEnvKeys).join(', '));
+
+          // 如果检测到关闭了 Bangumi Data 功能，主动释放 V8 内存
+          if (process.env.USE_BANGUMI_DATA === 'false' || process.env.USE_BANGUMI_DATA === false) {
+              clearBangumiDataCache();
+          }
+
         } catch (error) {
           console.log('[server] Error reloading configuration files:', error.message);
         }
@@ -298,8 +313,8 @@ function createServer() {
         body: body || undefined, // 对于 GET/HEAD 等请求，body 为 undefined
       });
 
-      // 调用核心处理函数，并标识平台为 "node"
-      const webResponse = await handleRequest(webRequest, process.env, "node", clientIp);
+      // 调用核心处理函数，并标识当前部署平台
+      const webResponse = await handleRequest(webRequest, process.env, detectNodeDeployPlatform(), clientIp);
 
       // 将 Web API Response 对象转换为 Node.js 响应
       res.statusCode = webResponse.status;
@@ -455,6 +470,13 @@ async function startServer() {
   // 设置 .env 文件监听
   await setupEnvWatcher();
 
+  // 初始化全局变量环境
+  try {
+    Globals.init(process.env);
+  } catch (e) {
+    console.error('[server] Globals init failed:', e);
+  }
+
   // 启动主业务服务器（默认 9321，可通过 DANMU_API_PORT 覆盖）
   const configuredMainPort = Number.parseInt(process.env.DANMU_API_PORT ?? '', 10);
   const mainPort = Number.isNaN(configuredMainPort) ? 9321 : configuredMainPort;
@@ -467,6 +489,9 @@ async function startServer() {
   proxyServer = createProxyServer();
   proxyServer.listen(5321, '0.0.0.0', () => {
     console.log('Proxy server running on http://0.0.0.0:5321');
+
+    // 异步初始化 Bangumi Data 缓存
+    setTimeout(() => initBangumiData('node', true).catch(console.error), 1000);
   });
 }
 

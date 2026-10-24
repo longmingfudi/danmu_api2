@@ -37,7 +37,7 @@ LogVar 弹幕 API 服务器
 - [Docker 一键启动 【推荐】](#docker-一键启动-推荐)
 - [部署到 Vercel 【推荐】](#部署到-vercel-推荐)
 - [部署到 Netlify](#部署到-netlify)
-- [部署到 腾讯云 edgeone pages](#部署到-腾讯云-edgeone-pages)
+- [部署到 腾讯云 EdgeOne Makers](#部署到-腾讯云-edgeone-makers)
 - [部署到 Cloudflare](#部署到-cloudflare)
 - [部署到 Hugging Face Spaces](#部署到-hugging-face-spaces)
 - [API食用指南](#api食用指南)
@@ -67,6 +67,11 @@ LogVar 弹幕 API 服务器
   - `POST /api/v2/favorite/refresh`：使用 `{ "keyword": "火影忍者" }` 强制重新搜索并更新收藏缓存。
   - `POST /api/v2/favorite/schedule`：设置或关闭收藏的定时刷新（仅 Node/Docker 部署可用）。设置使用 `{ "keyword": "火影忍者", "schedule": { "frequency": "daily", "time": "03:00" } }`；每周模式需额外传 `"weekday": 1-7`（周一至周日），例如 `{ "frequency": "weekly", "time": "03:00", "weekday": 1 }`。关闭使用 `{ "keyword": "火影忍者", "schedule": null }`。固定按北京时间（`Asia/Shanghai`）执行，serverless 平台返回 `501`。
   - `POST /api/v2/favorite/remove`：使用 `{ "keyword": "火影忍者" }` 删除收藏及对应搜索缓存。
+  - `POST /api/v2/local-danmu/upload`：上传并解析本地弹幕文件（`multipart/form-data`，字段包括 `file`、`title`、`year`、`type`，电视剧可指定 `season`、`episode`）。每次接收一个文件，最大 10 MB；管理页面的批量导入会依次调用此接口。
+  - `GET /api/v2/local-danmu/list`：获取已上传的本地弹幕资源及按标题、年份、类型、季分组的列表。
+  - `GET /api/v2/local-danmu/:resourceKey`：获取指定本地弹幕资源的元数据；`DELETE /api/v2/local-danmu/:resourceKey`：删除资源。
+  - `PATCH /api/v2/local-danmu/:resourceKey`：编辑本地弹幕元数据；`scope=resource` 修改集数和显示文件名，`scope=group` 修改当前季的标题、年份、类型和季数。目标资源已存在时返回冲突错误，不会覆盖原文件。
+  - 本地弹幕接口需要 `TOKEN` 或 `ADMIN_TOKEN`。默认仅管理员可上传和删除；设置 `LOCAL_DANMU_NOT_REQUIRE_ADMIN=true` 后，普通 `TOKEN` 也可执行上传和删除。Node/Docker 将资源保存到 `.cache/local-danmu`，云端部署使用 Redis 持久化。
 - **弹幕格式输出**：支持 JSON 和 XML 及 [@dan-uni/dan-any](https://github.com/ani-uni/dan-any)支持的全部输出格式 输出，通过以下方式配置：
   - 环境变量：`DANMU_OUTPUT_FORMAT=json|xml|artplayer.json|baha.json|bili.xml|danuni.json|danuni.binpb|ddplay.json|dplayer.json|vod.json`（默认：json）
   - 查询参数：`?format=xml` 或 `?format=json` ...（优先级最高）
@@ -93,7 +98,7 @@ LogVar 弹幕 API 服务器
   - Redis 分布式缓存支持，包括本地redis和upstash redis（可选）
   - 配置redis可持久化原有查询信息和永久收藏；搜索结果与弹幕缓存仍只保存在实例内存中，不会写入 Redis
   - 本地和Docker部署支持实时保存缓存到文件（挂载.cache目录即可）
-- **部署支持**：支持本地运行、Docker 容器化、Vercel 一键部署、Netlify 一键部署、Edgeone 一键部署、Cloudflare 一键部署、Hugging Face Spaces部署和 Docker 一键启动。
+- **部署支持**：支持本地运行、Docker 容器化、Vercel 一键部署、Netlify 一键部署、EdgeOne Makers 一键部署、Cloudflare 一键部署、Hugging Face Spaces部署和 Docker 一键启动。
 - **手动选择记忆**：支持记住之前搜索title时手动选择的anime，并在后续的match自动匹配时优选该anime，支持记住集episode，下次自动匹配时会对集进行偏移【实验性】。
 - **手动搜索支持输入播放链接获取弹幕**：支持手动搜索的播放器输入爱优腾芒哔咪狐乐西埋巴Ani红播放链接可获取弹幕，如`senplayer`。
   - 支持空格分隔多个链接合并弹幕，例如：`https://www.iqiyi.com/v_xxx.html https://v.qq.com/x/cover/xxx.html`
@@ -116,6 +121,7 @@ LogVar 弹幕 API 服务器
     - 自动匹配测试、手动匹配测试及收藏管理
   - 推送弹幕
   - 请求记录
+  - 本地弹幕上传、列表管理和删除
   - 系统管理
 
 ## 前置条件
@@ -155,13 +161,28 @@ LogVar 弹幕 API 服务器
    ```bash
    # 启动
    node ./danmu_api/server.js
-   # 测试
-   node --test ./danmu_api/worker.test.js
+   # 测试（danmu_api/tests 下的全部用例）
+   npm test
+   # 只跑单个测试文件
+   node --test danmu_api/tests/utils/merge-util.test.js
    # 构建forward弹幕插件
    node build-forward-widget.js
-   # 测试forward弹幕插件
-   node forward/forward-widget.test.js
+   # 测试forward弹幕插件（真实联网，需手动执行）
+   node forward/forward-widget.spec.js
    ```
+
+   > 测试用例全部位于 `danmu_api/tests/`，目录与 `danmu_api/` 源码目录一一对应（`utils/`、`sources/`、`apis/`、`configs/`、`models/`、`ui/`），
+   > 跨模块的请求级用例放在 `tests/` 顶层，共享夹具在 `tests/helpers/`。
+   > `npm test` 使用 `node --test --test-concurrency=1`：本地弹幕与 Bangumi Data 用例会读写仓库根目录的 `.cache/`，
+   > 因此测试文件必须串行执行，请勿去掉 `--test-concurrency=1`。
+   > 该命令依赖 Node 默认的测试文件发现规则（Node 18 及以上均可用），不需要也不应改成 `--test <目录>` 形式。
+   > `danmu_api/tests/manual/live-source-checks.js` 是依赖真实数据源的手工巡检用例，不会被自动发现、也不参与 `npm test`；
+   > 手动执行：`node --test danmu_api/tests/manual/live-source-checks.js`（详见文件头说明）；
+   > 其中写入真实平台环境变量 / 触发真实部署 / 写真实 Redis 的用例默认跳过，需要时加 `LIVE_SOURCE_WRITE_CHECKS=true`。
+   > 提交 PR 或推送到 main 时会由 `.github/workflows/test.yml` 自动执行 `npm install` + `npm test`（无需任何 secrets，
+   > 也不访问外网/Redis，fork PR 同样会跑）；CI 使用 Node 24，**运行测试需要 Node ≥ 22.3**——
+   > `configs/cache-persistence.test.js` 与 `configs/cache-backends.test.js` 的子进程依赖 `--experimental-test-module-mocks`。
+   > 全新 clone 里没有 `config/.env`（仅跟踪 `config/.env.example`），相关用例会自行临时生成并清理，无需手工准备。
 
 5. **测试 API**：
    使用 Postman 或 curl 测试：
@@ -327,10 +348,18 @@ GET http://127.0.0.1:9321/87654321/api/logs
   2. 在“Environment variables”部分点击 “Add a variable” 添加 `TOKEN` 变量，输入你的 API 令牌值。
   3. 保存更改并重新部署。
 
-## 部署到 腾讯云 edgeone pages
+<a id="部署到-腾讯云-edgeone-pages"></a>
+
+## 部署到 腾讯云 EdgeOne Makers
+
+EdgeOne Pages 已更名为 EdgeOne Makers，现有项目无需因品牌更名迁移，本项目也无需为项目 ID 前缀变化升级部署代码。[官方更名说明](https://pages.edgeone.ai/zh/resources/announcement-makers-rename)
+
+使用 UI 管理云端环境变量时，`DEPLOY_PLATFROM_PROJECT` 请填写控制台显示的完整项目 ID：旧项目通常为 `pages-xxxxxxxxxxxx`，新版控制台创建的项目通常为 `makers-xxxxxxxxxxxx`。两种前缀均可直接填写，请勿自行替换前缀。`DEPLOY_PLATFROM_TOKEN` 填写项目所属账号的 API Token，具体获取步骤见 [部署平台环境变量配置指南](danmu_api/ui/README.md#3-edgeone-makers-平台)。
+
+部署链接和接口地址中仍可能保留 `pages`，无需按品牌名称自行改成 `makers`。
 
 ### 一键部署
-[![使用 EdgeOne Pages 部署](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://console.cloud.tencent.com/edgeone/pages/new?template=https://github.com/huangxd-/danmu_api&project-name=danmu-api&root-directory=.%2F&env=TOKEN)
+[![使用 EdgeOne Makers 部署](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://console.cloud.tencent.com/edgeone/pages/new?template=https://github.com/huangxd-/danmu_api&project-name=danmu-api&root-directory=.%2F&env=TOKEN)
 
 > 注意：部署时请在环境变量配置区域填写你的TOKEN值，该变量将用于API服务的身份验证相关功能
 > 
@@ -339,11 +368,11 @@ GET http://127.0.0.1:9321/87654321/api/logs
 >
 > 部署的时候项目加速区域最好设置为"全球可用区（不含中国大陆）"，不然不绑定自定义域名貌似只能生成3小时的预览链接？[相关文档](https://edgeone.cloud.tencent.com/pages/document/175191784523485184)
 > 
-> 也可直接用国际站的部署按钮一键部署，默认选择"全球可用区（不含中国大陆）" [![使用 EdgeOne Pages 部署](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/pages/new?template=https://github.com/huangxd-/danmu_api&project-name=danmu-api&root-directory=.%2F&env=TOKEN)
+> 也可直接用国际站的部署按钮一键部署，默认选择"全球可用区（不含中国大陆）" [![使用 EdgeOne Makers 部署](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/pages/new?template=https://github.com/huangxd-/danmu_api&project-name=danmu-api&root-directory=.%2F&env=TOKEN)
 > 
 <img src="https://i.mji.rip/2025/09/17/3a675876dabb92e4ce45c10d543ce66b.png" style="width:400px" />
 
-> 如果每次访问都遇到404等问题，可能是edgeone pages修改了访问策略，每次接口请求都转发到了新的环境，没有缓存，导致获取不到对应的弹幕，推荐用vercel/netlify部署。
+> 如果每次访问都遇到404等问题，可能是 EdgeOne Makers 修改了访问策略，每次接口请求都转发到了新的环境，没有缓存，导致获取不到对应的弹幕，推荐用vercel/netlify部署。
 > 
 > 解决方法：请配置环境变量`UPSTASH_REDIS_REST_URL`和`UPSTASH_REDIS_REST_TOKEN`，开启upstash redis存储
 
@@ -449,6 +478,7 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 | TOKEN      | 【可选】自定义用户token，不填默认为`87654321`       |
 | ADMIN_TOKEN      | 【可选】系统管理访问令牌，如果未配置此值，则无法访问系统管理功能，需要先配置后在URL中填入此token才能打开系统管理       |
 | FAVORITE_REQUIRE_ADMIN | 【可选】收藏写入和管理接口是否必须使用 `ADMIN_TOKEN`，默认为 `false`。设为 `false` 时接受 `TOKEN` 或 `ADMIN_TOKEN`；自定义 `TOKEN` 必须在 URL 路径中显式携带，默认 `TOKEN=87654321` 时可省略。设为 `true` 时只接受已配置的 `ADMIN_TOKEN`。`GET /api/v2/favorite/list` 始终公开，无需 token。 |
+| LOCAL_DANMU_NOT_REQUIRE_ADMIN | 【可选】本地弹幕上传和删除是否无需 ADMIN 权限，默认为 `false`。普通 `TOKEN` 用户可查看已导入列表。设为 `false` 时仅 `ADMIN_TOKEN` 可上传和删除，非管理员点击“选择文件”或删除按钮会直接提示需要 ADMIN 权限；设为 `true` 时也允许普通 `TOKEN` 用户上传和删除。 |
 | OTHER_SERVER   | 【可选】兜底第三方弹幕服务器，不填默认为`https://api.danmu.icu`，其他可选：`https://fc.lyz05.cn`，`https://dmku.hls.one`，`https://se.678.ooo`，`https://danmu.56uxi.com`，`https://dm.lxlad.com`       |
 | CUSTOM_SOURCE_API_URL   | 【可选】自定义弹幕源API地址，默认为空，配置后还需在SOURCE_ORDER添加custom源       |
 | VOD_SERVERS      | 【可选】VOD服务器列表，支持多个服务器并发查询，格式：`名称@URL,名称@URL,...`，示例：`金蝉@https://zy.jinchancaiji.com,789@https://www.caiji.cyou,听风@https://gctf.tfdh.top`，不填默认为`金蝉@https://zy.jinchancaiji.com,789@https://www.caiji.cyou,听风@https://gctf.tfdh.top`       |
@@ -457,7 +487,7 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 | BILIBILI_COOKIE      | 【可选】b站cookie（填入后能抓取完整弹幕和启用港澳台App接口），如 `buvid3=E2BCA ... eao6; theme-avatar-tip-show=SHOWED`，请自行通过浏览器或抓包工具抓取，热心网友测试后，弹幕获取实际最少只需取 `SESSDATA=xxxx` 字段，但如果需要使用港澳台区域稳定的App搜索接口还需要`bili_jct=xxxx`或`access_key=xxxx` 字段，不知道怎么获取cookie的，可以从工具 [cookie-butler](https://cookie-butler.do-u.me) 获取    |
 | DOUBAN_COOKIE      | 【可选】豆瓣cookie，用于豆瓣相关接口请求，配置后可降低豆瓣接口风控影响，提升搜索/详情获取的稳定性。填写浏览器中已登录豆瓣后的完整 Cookie 字符串即可，格式示例：`bid=xxxx; ll="118282"; ...`。如遇到豆瓣搜索不稳定、返回异常或频繁验证，建议优先补充该变量       |
 | YOUKU_CONCURRENCY    | 【可选】youku弹幕请求并发数，用于加快youku弹幕请求速度，不填默认为`8`，最高`16`       |
-| SOURCE_ORDER    | 【可选】源排序，用于按源对返回资源的排序（注意：先后顺序会影响自动匹配最终的返回），默认是`douban,360,renren,hanjutv`，表示douban数据排在最前，hanjutv数据排在最后，示例：`douban,renren`：只返回douban数据和renren数据，且douban数据靠前；当前可选择的源字段有 `360,vod,tmdb,douban,tencent,youku,iqiyi,imgo,bilibili,migu,sohu,leshi,xigua,maiduidui,aiyifan,hongguo,renren,hanjutv,dandan,bahamut,animeko,custom`       |
+| SOURCE_ORDER    | 【可选】源排序，用于按源对返回资源的排序（注意：先后顺序会影响自动匹配最终的返回），默认是`douban,360,renren,hanjutv`，表示douban数据排在最前，hanjutv数据排在最后，示例：`douban,renren`：只返回douban数据和renren数据，且douban数据靠前；当前可选择的源字段有 `360,vod,tmdb,douban,tencent,youku,iqiyi,imgo,bilibili,migu,sohu,leshi,xigua,maiduidui,aiyifan,hongguo,renren,hanjutv,dandan,bahamut,animeko,custom,local`。`local` 表示已上传的本地弹幕，例如 `local,douban,360` 会将本地弹幕搜索结果排在前面。       |
 | PLATFORM_ORDER    | 【可选】自动匹配优选平台，按顺序优先返回指定平台弹幕，默认为空，即返回第一个满足条件的平台，示例：`bilibili1,qq`，表示如果有b站的播放源，则优先返回b站的弹幕，否则就返回腾讯的弹幕，两者都没有，则返回第一个满足条件的平台，当配置合并平台的时候为指定期望的合并源；当前可选择的平台字段有 `qiyi, bilibili1, imgo, youku, qq, migu, sohu, leshi, xigua, maiduidui, aiyifan, hongguo, renren, hanjutv, dandan, bahamut, animeko, custom`  |
 | MERGE_SOURCE_PAIRS    | 【可选】源合并配置，配置后将对应源合并同时一起获取弹幕返回，默认为空，格式是`源字段&源字段&源字段`，示例：`dandan&bahamut&animeko,renren&hanjutv,renren`， 允许多组、允许同时存在、允许多源，允许填单源表示保留原结果，一组中第一个为主源其余为副源，副源往主源合并，主源如果没有结果会轮替下一个作为主源循环，目前允许合并的源字段有`tencent,youku,iqiyi,imgo,bilibili,migu,sohu,leshi,xigua,maiduidui,aiyifan,hongguo,renren,hanjutv,dandan,bahamut,animeko` |
 | CUSTOM_MERGE_RULES | 【可选】合并映射表，用于自定义源合并行为，默认为空。<br>格式 1 (合并)：`副源剧名/S季数@来源 -> 主源剧名/S季数@来源 \| E副源集数>E主源集数`<br>格式 2 (阻断)：`副源剧名/S季数@来源 × 主源剧名/S季数@来源`<br>说明：`[/S季数]` 与 `[\|路由规则]` 为可选项，留空则交由程序判断。多个规则用分号隔开，多段路由用逗号分隔。<br>示例：<br>1. 常规合并：`天气之子@bilibili -> 天气之子@dandan`<br>2. 多集路由：`我推的孩子/S01@bahamut -> 我推的孩子/S03@dandan \| E25~E35>E25~E35`<br>3. 阻断合并：`辉夜大小姐想让我告白？～天才们的恋爱头脑战～(2020)@bilibili × 辉夜大小姐想让我告白～天才们的恋爱头脑战～ OVA(2021)【OVA】@dandan` |
@@ -481,7 +511,7 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 | DANMU_SIMPLIFIED_TRADITIONAL    | 【可选】弹幕简繁体转换设置：default（默认不转换）、simplified（繁转简）、traditional（简转繁）       |
 | DANMU_OFFSET      | 【可选】弹幕时间偏移配置，用于解决弹幕与视频不同步的问题。格式：剧名:秒（全剧偏移）或 剧名/季:秒（整季偏移）或 剧名/季/集:秒（单集偏移），支持指定来源：剧名@来源:秒 或 剧名/季@来源1&来源2:秒（不指定来源则对所有来源生效），多条用逗号分隔。例如：`overlord/S01:90, re-zero/S02@bilibili:120, re-zero/S02/E03@dandan&bilibili:10`。正数表示弹幕延后（向右），负数表示弹幕提前（向左）。支持百分比模式，在路径/来源末尾添加 `%`，例如：`东方/S03/E02@tencent%:11`，按 `原时间 * (视频时长 + 偏移秒数) / 视频时长` 计算新的弹幕发送时间。       |
 | UI_THEME    | 【可选】管理界面默认主题，默认为 `lavender`（经典默认）。浏览器中选择的主题会保存在本地并优先使用。可选值：`lavender`（经典默认）、`shinyo`（新叶绿）、`sakura`（哔哩粉）、`tianyi`（天依蓝）、`hatsune`（初音青）、`sakuragi`（樱木红）、`violet`（罗兰紫）、`amber`（LCL橘）       |
-| PROXY_URL    | 【可选】代理/反代地址，目前只对巴哈姆特、TMDB API、bilibili、animeko生效，支持格式：<br> 正常代理：`http://127.0.0.1:7890` <br> 万能反代：`@http://127.0.0.1` <br> 特定反代：`源字段@http://127.0.0.1`，目前支持的字段有：`bahamut,tmdb,bilibili,animeko`（bilibili字段会启用阿b的港澳台番剧的搜索与获取）<br> 混合配置/示例：`http://你的代理地址:28233,bahamut@你的巴哈反代地址,tmdb@你的tmdb反代地址,@你的万能反代地址` <br> 优先级：特定反代 > 万能反代 > 正常代理，高优先级覆盖低优先级使用。 <br> （注意：如果巴哈姆特请求不通，会拖慢搜索返回速度，如需使用bahamut源请在SOURCE_ORDER环境变量中手动添加`bahamut`）如果你使用docker部署并且访问不了 bahamut / animeko 源或 TMDB API ，请配置代理/反代地址（animeko 也可通过开启 Bangumi Data 解决）（[Netlify反代教程](https://github.com/wan0ge/bahamut-api-proxy)）；vercel/netlify/cf中理应都自然能联通，不用填写       |
+| PROXY_URL    | 【可选】代理/反代地址，目前只对巴哈姆特、TMDB API、bilibili、animeko、aiyifan生效，支持格式：<br> 正常代理：`http://127.0.0.1:7890`，支持 `http://用户名:密码@代理地址:端口`（用户名和密码中的特殊字符需分别 URL 编码） <br> 万能反代：`@http://127.0.0.1` <br> 特定反代：`源字段@http://127.0.0.1`，目前支持的字段有：`bahamut,tmdb,bilibili,animeko,aiyifan`（bilibili字段会启用阿b的港澳台番剧的搜索与获取）<br> 混合配置/示例：`http://你的代理地址:28233,bahamut@你的巴哈反代地址,tmdb@你的tmdb反代地址,@你的万能反代地址` <br> 优先级：特定反代 > 万能反代 > 正常代理，高优先级覆盖低优先级使用。 <br> （注意：如果巴哈姆特请求不通，会拖慢搜索返回速度，如需使用bahamut源请在SOURCE_ORDER环境变量中手动添加`bahamut`）如果你使用docker部署并且访问不了 bahamut / animeko 源或 TMDB API ，请配置代理/反代地址（animeko 也可通过开启 Bangumi Data 解决）（[Netlify反代教程](https://github.com/wan0ge/bahamut-api-proxy)）；vercel/netlify/cf中理应都自然能联通，不用填写       |
 | TMDB_API_KEY    | 【可选】TMDB API Key地址，目前只对巴哈姆特生效，配置后并行从TMDB获取日语原名搜索巴哈（如果TMDB条目类型不是动画或制作地区不是jp则不会进行巴哈搜索）可以解决巴哈译名不同导致的搜索无结果问题，例如大陆常用译名`间谍过家家`在巴哈译名为`間諜家家酒`，正常搜索无法搜索到，配置后可以解决这一问题但会稍微影响请求速度，[TMDBAPI](https://www.themoviedb.org/settings/api)获取方法参考：[TMDB API Key申请 - 绿联NAS私有云](https://www.ugnas.com/tutorial-detail/id-226.html)       |
 | RATE_LIMIT_MAX_REQUESTS    | 【可选】限流配置：1分钟内同一IP最大请求次数，默认为`3`，设置为`0`表示不限流       |
 | IP_BLACKLIST    | 【可选】IP 黑名单列表，命中则拒绝请求。支持逗号/分号/换行分隔，支持 `/regex/` 或 `/regex/i` 正则，支持 IPv4/IPv6 CIDR，例如：`192.168.1.10,10.0.0.0/24,2001:db8::/64,/^203\.0\.113\./`       |
@@ -496,17 +526,19 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 | BANGUMI_DATA_CACHE_DAYS    | 【可选】指定 Bangumi Data 数据有效期(天)，默认为：`7`，超过有效期后会下载更新，设置0则每次请求时强制异步更新（需开启`USE_BANGUMI_DATA`）'       |
 | UPSTASH_REDIS_REST_URL    | 【可选】Upstash redis url，需配合UPSTASH_REDIS_REST_TOKEN使用，用于持久化原有查询信息和收藏缓存，避免 serverless 冷启动丢失收藏；搜索结果和弹幕缓存不会写入 Redis（会稍微影响收藏操作和冷启动请求速度），获取方法请参考：`https://cloud.tencent.cn/developer/article/2424508`       |
 | UPSTASH_REDIS_REST_TOKEN    | 【可选】Upstash redis token，需配合UPSTASH_REDIS_REST_URL使用，用于持久化原有查询信息和收藏缓存，避免 serverless 冷启动丢失收藏；搜索结果和弹幕缓存不会写入 Redis（会稍微影响收藏操作和冷启动请求速度），获取方法请参考：`https://cloud.tencent.cn/developer/article/2424508`       |
-| LOCAL_REDIS_URL    | 【可选】本地Redis连接URL，用于本地缓存存储，适用于docker和本地部署环境，格式：`redis://:password@127.0.0.1:6379/0`，默认为空（不使用本地Redis）       |
+| LOCAL_CACHE_ENABLED    | 【可选】Node/Docker 通用文件缓存开关，默认为 `true`，需已有 `.cache` 目录；设置 `false` 后不读取或写入通用文件缓存，包括收藏与定时计划；已配置 Upstash 时仍可持久化。不影响本地弹幕文件、Bangumi Data、内存缓存或 Redis。运行中开启时保存当前内存，不自动导入旧文件。       |
+| LOCAL_REDIS_URL    | 【可选】本地 Redis 连接 URL，用于查询数据持久化，适用于 Docker 和本地部署，格式：`redis://:password@127.0.0.1:6379/0`，默认为空（不使用本地 Redis）。       |
 | DEPLOY_PLATFROM_ACCOUNT    | 【可选】部署账号ID，调用部署服务API需要，配置后可使用UI界面配置服务，不同部署平台获取方式可查看 [部署平台环境变量配置指南](https://github.com/huangxd-/danmu_api/tree/main/danmu_api/ui/README.md#部署平台环境变量配置指南) ，docker部署和本地node部署并不需要配置      |
-| DEPLOY_PLATFROM_PROJECT    | 【可选】部署项目名称，调用部署服务API需要，配置后可使用UI界面配置服务，不同部署平台获取方式可查看 [部署平台环境变量配置指南](https://github.com/huangxd-/danmu_api/tree/main/danmu_api/ui/README.md#部署平台环境变量配置指南) ，docker部署和本地node部署并不需要配置       |
+| DEPLOY_PLATFROM_PROJECT    | 【可选】部署项目名称或 ID，EdgeOne Makers 填控制台显示的完整项目 ID（`pages-...` 或 `makers-...`），调用部署服务API需要，配置后可使用UI界面配置服务，不同部署平台获取方式可查看 [部署平台环境变量配置指南](https://github.com/huangxd-/danmu_api/tree/main/danmu_api/ui/README.md#部署平台环境变量配置指南) ，docker部署和本地node部署并不需要配置       |
 | DEPLOY_PLATFROM_TOKEN    | 【可选】部署平台token，调用部署服务API需要，配置后可使用UI界面配置服务，不同部署平台获取方式可查看 [部署平台环境变量配置指南](https://github.com/huangxd-/danmu_api/tree/main/danmu_api/ui/README.md#部署平台环境变量配置指南) ，docker部署和本地node部署并不需要配置       |
 | NODE_TLS_REJECT_UNAUTHORIZED      | 【可选】在建立 HTTPS 连接时是否验证服务器的 SSL/TLS 证书，0表示忽略，默认为1       |
 | AI_BASE_URL      | 【可选】AI服务的基础URL地址，用于配置AI相关功能的API端点，不填默认为https://api.openai.com/v1       |
 | AI_MODEL      | 【可选】AI模型名称，指定使用的AI模型，不填默认为gpt-4o       |
 | AI_API_KEY      | 【可选】AI服务的API密钥，用于身份验证，默认为空，需手动填写       |
 | AI_MATCH_PROMPT      | 【可选】AI匹配提示词，用于自定义AI匹配行为，不填提供默认提示词，提示词如下       |
-| USE_BANGUMI_DATA      | 【可选】[Bangumi Data](https://github.com/bangumi-data/bangumi-data) 加速匹配开关，默认值：`false`（关闭），开启后将动画元数据缓存至本地或内存中给源调用，提升动画源的检索与匹配速度并解锁隐藏/区域番剧（本地和Docker部署使用时请先挂载.cache目录获得最佳体验，云部署使用时会将数据缓存至临时内存中如果体验不佳请关闭）       |
-| NIPAPLAY_REPLACE_DANDAN      | 【可选】 [NipaPlay](https://github.com/AimesSoft/NipaPlay-Reload) 弹弹302关联弹幕替代开关（用于 dandan 源），默认为`false`（关闭，使用弹弹原生弹幕），可选值：`true`、`false`。开启后 dandan 源以 nipaplay 弹弹302关联弹幕替代弹弹原生弹幕，因使用的是项目链路获取弹幕所以`1.会丢失弹弹平台弹幕` `2.无法获取下架视频` `3.如果关联中有巴哈姆特平台需要确保能够连通巴哈`       |
+| USE_BANGUMI_DATA      | 【可选】[Bangumi Data](https://github.com/bangumi-data/bangumi-data) 数据辅助开关，默认值：`false`（关闭），开启后将动画元数据缓存至本地或内存中给源调用，提升动画源的检索速度与匹配精准度并补全特定数据与番剧（本地和Docker部署使用时请先挂载.cache目录获得最佳体验，云部署使用时会将数据缓存至临时内存中如果体验不佳请关闭）       |
+| DANDANPLAY_ACCOUNT      | 【可选】弹弹play账号（dandan 源使用）。与密码同时填写后开启 [NipaPlay](https://github.com/AimesSoft/NipaPlay-Reload) 中转弹弹play辅助服务，使用 NipaPlay 获取弹幕与兜底，解决默认服务端无弹幕与更新缓慢的问题，并开启弹弹聚合弹幕实时拉取功能（实时拉取注意：需先开启对应源；指向的平台视频若已下架将无法获取；含巴哈姆特平台时需确保能够连通巴哈）       |
+| DANDANPLAY_PASSWORD      | 【可选】弹弹play密码（dandan 源使用），与账号同时填写后开启 [NipaPlay](https://github.com/AimesSoft/NipaPlay-Reload) 中转弹弹play辅助服务（UI 配置页提供连通性测试）       |
 
 ```regex
 # EPISODE_TITLE_FILTER 默认值
@@ -518,7 +550,7 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 
 ```plain
 # TITLE_NOISE_FILTER 默认值
-[（(\\[](?:臻彩|真彩|高清|标清|超清|国配|中配|日配|粤语|原声|台配|无修|未删减|完整版|日语版|国语版|英语版|中字|字幕|助听|原版)[\\])）]
+[（(\[［](?:臻彩|真彩|高清|标清|超清|国配|中配|日配|粤语|原声|台配|无修|未删减|完整版|日语版|国语版|英语版|中字|字幕|助听|原版)[\])）］]
 ```
 
 ```regex
@@ -612,18 +644,21 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 | dandan   | [dandan](https://www.dandanplay.com/) |
 | animeko  | [animeko](https://github.com/open-ani/animeko) |
 | custom   | custom |
+| local    | 本地上传弹幕（无播放平台） |
 
 ## 项目结构
 ```
 ├── .gitignore
+├── .pr_agent.toml              # PR Agent 配置文件
 ├── .github/
 │   └── workflows/
 │       ├── docker-image.yml     # Docker 镜像构建与推送
+│       ├── pr_agent.yml         # PR Agent 自动审查
 │       ├── sync_fork.yml        # Fork 仓库自动同步
 │       └── sync_hf.yml          # Hugging Face Space 同步
 ├── build-forward-widget.js     # 构建forward弹幕插件脚本
 ├── Dockerfile
-├── edgeone.json                # edgeone pages 配置文件
+├── edgeone.json                # EdgeOne Makers 配置文件
 ├── LICENSE
 ├── netlify.toml                # netlify 配置文件
 ├── package.json
@@ -637,11 +672,16 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 │   ├── esm-shim.cjs            # Node.js低版本兼容层
 │   ├── server.js               # 本地node启动脚本
 │   ├── worker.js               # 主 API 服务器代码
-│   ├── worker.test.js          # 测试文件
+│   ├── tests/                  # 测试用例，目录结构与源码一一对应（npm test 入口）
+│   │   ├── helpers/            # 共享夹具（请求/响应 mock、全局状态重置、DOM 沙箱）
+│   │   ├── apis/ configs/ models/ sources/ utils/ ui/  # 按模块镜像的 *.test.js
+│   │   ├── worker-api.test.js  # 请求级端点测试
+│   │   └── manual/             # 依赖真实数据源的手工巡检用例（不参与自动测试，需手动指定路径运行）
 │   ├── apis/
 │   │   ├── clients/
 │   │   │   └── fongmi-api.js   # FongMi影视兼容接口
 │   │   ├── dandan-api.js       # 弹弹play兼容接口函数
+│   │   ├── local-danmu-api.js  # 本地弹幕上传、列表、读取和删除接口
 │   │   ├── env-api.js          # 环境变量接口函数
 │   │   ├── favorite-api.js     # 永久收藏的新增、列表、刷新、删除和定时刷新接口
 │   │   ├── forward-trace-api.js # Forward 调试日志回传接口
@@ -684,7 +724,9 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 │   │   ├── tmdb.js             # TMDB源
 │   │   ├── vod.js              # vod源
 │   │   ├── xigua.js            # 西瓜视频源
-│   │   └── youku.js            # 优酷源
+│   │   ├── youku.js            # 优酷源
+│   │   ├── local.js            # 本地弹幕源
+│   │   └── registry.js         # 弹幕源注册与实例管理
 │   ├── ui/
 │   │   ├── README.md           # UI系统使用说明
 │   │   ├── template.js         # UI模板文件
@@ -696,6 +738,8 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 │   │   │   └── themes.css.js   # 管理界面主题样式
 │   │   └── js/
 │   │       ├── apitest.js      # API测试脚本
+│   │       ├── icons.js        # UI图标
+│   │       ├── localdanmu.js   # 本地弹幕上传与管理脚本
 │   │       ├── logview.js      # 日志查看脚本
 │   │       ├── main.js         # UI主脚本
 │   │       ├── preview.js      # 预览功能脚本
@@ -721,9 +765,11 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 │       ├── imdb-util.js        # IMDB API请求工具
 │       ├── local-redis-util.js # 本地redis工具
 │       ├── log-util.js         # 日志工具
+│       ├── local-danmu-parser.js # 本地弹幕文件解析与资源键工具
+│       ├── local-danmu-store.js # 本地弹幕文件/Redis存储工具
 │       ├── merge-util.js       # 源合并处理工具
 │       ├── migu-util.js        # 咪咕工具
-│       ├── nipaplay-util.js    # NipaPlay 弹弹302关联链接工具
+│       ├── nipaplay-util.js    # NipaPlay 中转弹弹play服务端工具
 │       ├── offset-util.js      # 弹幕偏移工具
 │       ├── redis-util.js       # redis工具
 │       ├── server-listen-util.js # IPv4/IPv6 双栈监听与 IPv4 回退工具
@@ -733,13 +779,13 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 ├── forward/
 │   ├── custom-polyfill.js      # 自定义polyfill
 │   ├── forward-widget.js       # forward弹幕插件
-│   └── forward-widget.test.js  # forward弹幕插件测试文件
+│   └── forward-widget.spec.js  # forward弹幕插件测试脚本（真实联网，手动执行）
 ├── netlify/
 │   └── functions/
 │       └── api.js              # netlify 中间处理逻辑
 └── node-functions/
-    ├── [[...path]]..js         # edgeone pages 所有路由跳转指向index
-    └── index.js                # edgeone pages 中间处理逻辑
+    ├── [[...path]]..js         # EdgeOne Makers 所有路由跳转指向index
+    └── index.js                # EdgeOne Makers 中间处理逻辑
 ```
 
 ## 注意事项
@@ -763,6 +809,9 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 - cloudflare貌似有单次请求数量限制，会导致后半部分没有弹幕。
 - 如果想更换兜底第三方弹幕服务器，请添加环境变量`OTHER_SERVER`，示例`https://api.danmu.icu`。
 - 如果想使用自定义弹幕源，请添加环境变量`CUSTOM_SOURCE_API_URL`，并在`SOURCE_ORDER`环境变量中添加`custom`源。
+- 本地弹幕上传的标题、年份和类型为必填项。年份从今年向下排列至 `1900` 年，默认值和最大值均为打开页面时的当前年份；类型仅可选 `tv` 或 `movie`。`tv` 的季和集均默认 `1`，`movie` 的季和集可留空。管理列表按标题、年份、类型、季归为一个剧集，支持按标题关键词搜索，展开后缩进显示各集，可编辑剧集或单集信息、单独删除文件、重新上传文件或一次删除整个剧集；编辑不会重新解析弹幕内容，同一季同一集重新上传会替换原文件，不同季独立保存。编辑后若目标资源已存在会拒绝保存。旧资源继续兼容，未填写季数的资源沿用第 1 季处理。在 `SOURCE_ORDER` 中添加 `local` 后即可搜索已上传的剧集。
+- 同一部电视剧支持多选弹幕文件批量导入，共用标题、年份和季。页面从 `S01E02`、`EP02`、`第02集`、`02.xml` 等文件名识别集数，并支持逐个修改；未识别或重复的集数需要先修正。文件逐个上传，每个文件不超过 10 MB，失败后继续处理其余文件，并显示各文件结果及成功、失败数量。电影仍逐个导入。
+- Node/Docker 部署的本地弹幕文件保存在 `.cache/local-danmu`，使用 Docker 时请挂载 `.cache` 目录以持久化；Vercel、Netlify、Cloudflare、EdgeOne、Hugging Face 等云端部署需要可用的 Redis 才能保存本地弹幕资源。
 - 如果想搜索bilibili港澳台番剧，请开启`Bangumi Data`匹配或添加环境变量`PROXY_URL`并填写`bilibili@`字段的解析/反代服务地址，示例：`bilibili@https://233.233.233`，支持部分[公共解析服务器](https://github.com/yujincheng08/BiliRoaming/wiki/%E5%85%AC%E5%85%B1%E8%A7%A3%E6%9E%90%E6%9C%8D%E5%8A%A1%E5%99%A8)，另外港澳台区域搜索最好在`BILIBILI_COOKIE`环境变量中加入包含`bili_jct`或`access_key`字段的cookie使用App接口，如果没有会使用不稳定的web接口进行搜索。（如果你填写的服务器遇到了App接口报错说明不支持App接口，Web接口报错-500、502正常，风控严重，但只要一直搜索总会成功）
 - 如果想更换vod站点，请添加环境变量`VOD_SERVERS`，示例`金蝉@https://zy.jinchancaiji.com,789@https://www.caiji.cyou,听风@https://gctf.tfdh.top`（支持多个服务器并发查询）。
 - 当配置多个VOD站点时，可通过`VOD_RETURN_MODE`环境变量控制返回结果方式：`all`（返回所有站点结果）或`fastest`（默认，只返回最快的站点结果，避免结果过多）。
@@ -771,7 +820,8 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 - TMDB源请求逻辑：search tmdb -> tmdbId -> imdbId -> doubanId -> playUrl；优点：emby通过tmdb刮削，标题通过tmdb搜索，返回的信息可能更加匹配；缺点：链条过长，请求时长5-10s左右，中间一环数据有缺失，就没有返回结果。
 - TMDB源在SOURCE_ORDER添加tmdb的同时，需要添加TMDB_API_KEY环境变量
 - 弹幕分片下载请求已加入重试机制，重试次数为1次
-- 如果同时配置了本地缓存和upstash redis缓存和本地redis缓存，优先级为本地redis > upstash redis缓存 > 本地缓存
+- 查询数据启动时按 Local Redis > Upstash > 文件缓存恢复，空或不可用的后端会继续尝试下一级；剧集详情与 ID 索引成组恢复，完整快照优先于残缺快照，其他查询数据按键回退，剧集计数器取各后端已知的有效最大值。只有恢复存在损坏或失败、且所有后端均未提供有效计数器或剧集 ID 时，才以当前毫秒时间戳作为编号起点，降低重用未知旧编号的风险。均无可用数据时使用内存。成功读取的后端独立写入，启动读取失败的后端在本进程内暂停查询数据写入，重启后重新恢复。运行中不重新导入旧快照；每个进程首次覆盖既有查询缓存文件前保留 `.bak-*` 备份，每个文件跨重启最多两份。
+- 设置界面清理缓存时，单独重置剧集编号会保留现存剧集 ID 的上界。损坏缓存被保护后，可显式清理全部查询项并在保存成功后恢复写入；仅清理部分项则需重启重读剩余数据，界面会提示。各缓存后端并发清理，Redis 清理操作使用 5 秒网络等待预算（Local Redis 包含建连时间）；持久化失败仍返回失败，并说明内存已清理和失败后端，不能视为全部清理成功。查询缓存与收藏独立加载，收藏读取失败时暂停对应后端的收藏写入，避免覆盖原快照。
 - 有任何问题，如部署/环境变量配置等，可通过deepwiki对本项目进行提问，链接入口：https://deepwiki.com/huangxd-/danmu_api ，其中项目内容一般每周刷新一次
 
 ### 部署完成后在播放器填写后弹幕未生效自主排查步骤
@@ -793,9 +843,9 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 [喂饭教程5：非常详细的 danmu_api 图文教程](https://bks.indevs.in)
 
 ### 特别感谢
-- 开源项目 [danmaku-anywhere](https://github.com/Mr-Quin/danmaku-anywhere) 提供的[弹弹play开放平台](https://doc.dandanplay.com/open/)接口
+- 开源项目 [danmaku-anywhere](https://github.com/Mr-Quin/danmaku-anywhere) 提供的[弹弹play开放平台](https://doc.dandanplay.com/open/) danmaku-anywhere 镜像弹弹play服务端使用授权
 
-- 开源项目 [NipaPlay-Reload](https://github.com/AimesSoft/NipaPlay-Reload) 提供的[弹弹play开放平台](https://doc.dandanplay.com/open/)302关联链接请求授权
+- 开源项目 [NipaPlay-Reload](https://github.com/AimesSoft/NipaPlay-Reload) 提供的[弹弹play开放平台](https://doc.dandanplay.com/open/) NipaPlay 中转弹弹play服务端使用授权
 
 - 开源项目 [animeko](https://github.com/open-ani/animeko) 提供的弹幕API
 
@@ -811,4 +861,3 @@ API 支持返回 Bilibili 标准 XML 格式的弹幕数据，通过查询参数 
 ### 📈项目 Star 数增长趋势
 #### Star History
 [![Star History Chart](https://api.star-history.com/svg?repos=huangxd-/danmu_api&type=Date)](https://www.star-history.com/#huangxd-/danmu_api&Date)
-

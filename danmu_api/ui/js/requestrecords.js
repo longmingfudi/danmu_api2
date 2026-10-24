@@ -42,7 +42,7 @@ async function renderRequestRecords() {
             const hasParams = Object.keys(params).length > 0;
             const paramsHtml = hasParams 
                 ? \`<div class="record-params">
-                    <div class="record-params-title">请求参数</div>
+                    <div class="record-params-title">\${uiIcon('braces')} 请求参数</div>
                     <pre>\${JSON.stringify(params, null, 2)}</pre>
                    </div>\` 
                 : '';
@@ -57,7 +57,7 @@ async function renderRequestRecords() {
                     <div class="record-interface">\${interfaceName}</div>
                     <div class="record-ip">\${clientIp}</div>
                 </div>
-                <div class="\${timestampClass}">\${timestamp}</div>
+                <div class="\${timestampClass}">\${uiIcon('clock')} \${timestamp}</div>
                 \${paramsHtml}
             </div>\`;
         }).join('');

@@ -16,7 +16,9 @@ export function runWithHttpCache(fn) {
 
 // 源调度键名（sourceOrderArr）到日志标签规范名称的映射
 // sourceOrderArr 中部分键名与对应源文件的标签命名不一致（如 360→360kan, imgo→mango）
-// 此映射表统一转换，确保 HTTP 日志标签与源文件内部标签一致
+// 此映射表为本地 fallback，与 sources/registry.js 的 logName 字段保持一致。
+// 注意：http-util.js 是各源依赖的底层工具，不可反向 import registry（会形成
+// http-util → registry → 各源 → http-util 的静态循环依赖），故保留本地表。
 const SOURCE_KEY_TO_LOG_NAME = {
   '360': '360kan',
   'imgo': 'mango',
@@ -224,7 +226,18 @@ export async function httpGet(url, options = {}) {
 
         data = decodedData; // 更新解压后的数据
       } else {
-        data = await response.text();
+        // 个别旧站点（如搜狐 videolist）仍返回 GBK；调用方可显式指定编码。
+        if (options.encoding) {
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          let encoding = options.encoding;
+          if (encoding === 'auto') {
+            const contentType = response.headers.get('content-type') || '';
+            encoding = /charset\s*=\s*(gbk|gb2312|big5)/i.exec(contentType)?.[1] || 'utf-8';
+          }
+          data = new TextDecoder(encoding).decode(bytes);
+        } else {
+          data = await response.text();
+        }
       }
 
       let parsedData;
@@ -456,20 +469,23 @@ export async function httpPost(url, body, options = {}) {
  * @param {object} [options] - 选项
  * @param {object} [options.headers] - 请求头
  * @param {object} [options.params] - 查询参数（暂未实现）
- * @param {boolean} [options.allow_redirects=true] - 是否允许重定向（暂未实现）
+ * @param {boolean} [options.allow_redirects=true] - 是否允许重定向（与 GET/POST 行为一致，false 时禁止以截获 3xx Location）
  * @returns {Promise<{data: any, status: number, headers: Record<string, string>}>}
  */
 async function httpRequestMethod(method, url, body, options = {}) {
   const currentSource = sourceLogContext.getStore() || "system";
   log("info", `[${currentSource}] [请求模拟] HTTP ${method}: ${url}`);
 
-  const { headers = {} } = options;
+  const { headers = {}, allow_redirects = true } = options;
   const validStatusCodes = Array.isArray(options.validStatusCodes) ? options.validStatusCodes : [];
 
   const fetchOptions = {
     method,
     headers: { ...headers },
   };
+
+  // 与 GET/POST 行为一致：默认跟随重定向，allow_redirects 为 false 时禁止（用于截获 3xx Location）
+  fetchOptions.redirect = allow_redirects ? 'follow' : 'manual';
 
   // 只有在 body 存在时才设置（DELETE 通常无 body）
   if (body !== undefined && body !== null) {

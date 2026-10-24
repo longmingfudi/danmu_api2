@@ -179,6 +179,7 @@ function loadEnvVariables() {
         .then(config => {
             // 从配置中获取admin token
             currentAdminToken = config.originalEnvVars?.ADMIN_TOKEN || '';
+            updateLocalDanmuPermission(config);
 
             originalToken = config.originalEnvVars?.TOKEN || '';
             
@@ -193,12 +194,14 @@ function loadEnvVariables() {
                     scheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                 }
                 document.body.dataset.colorScheme = scheme;
+                document.documentElement.dataset.colorScheme = scheme;
             }
             updateColorSchemeToggle();
             // 用户未手动选择时，跟随系统深浅色变更
             window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
                 if (!getStoredColorScheme()) {
                     document.body.dataset.colorScheme = e.matches ? 'dark' : 'light';
+                    document.documentElement.dataset.colorScheme = e.matches ? 'dark' : 'light';
                     updateColorSchemeToggle();
                 }
             });
@@ -393,7 +396,7 @@ function switchSection(section, event = null) {
     }
 
     // 检查是否尝试访问受token保护的section（日志查看、接口调试、推送弹幕、请求记录、系统配置需要token访问）
-    if (section === 'logs' || section === 'api' || section === 'env' || section === 'push' || section === 'request-records') {
+    if (section === 'logs' || section === 'api' || section === 'env' || section === 'push' || section === 'request-records' || section === 'local-danmu') {
         let _reverseProxy = customBaseUrl; // 使用全局配置
 
         // 获取URL路径并提取token
@@ -682,47 +685,64 @@ init();
 function toggleColorScheme() {
     const currentScheme = document.body.dataset.colorScheme || 'light';
     const newScheme = currentScheme === 'dark' ? 'light' : 'dark';
-    document.body.dataset.colorScheme = newScheme;
-    storeColorScheme(newScheme);
+    const btn = document.getElementById('theme-scheme-toggle');
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!document.startViewTransition || !btn || reducedMotion) {
+        applyColorScheme(newScheme);
+        return;
+    }
+    // 以开关中心为圆心、到最远角的距离为半径展开圆形裁剪
+    const rect = btn.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const radius = Math.hypot(
+        Math.max(centerX, window.innerWidth - centerX),
+        Math.max(centerY, window.innerHeight - centerY),
+    );
+    const transition = document.startViewTransition(function () { applyColorScheme(newScheme); });
+    transition.ready.then(function () {
+        document.documentElement.animate(
+            {
+                clipPath: [
+                    'circle(0px at ' + centerX + 'px ' + centerY + 'px)',
+                    'circle(' + radius + 'px at ' + centerX + 'px ' + centerY + 'px)',
+                ],
+            },
+            { duration: 600, easing: 'ease-out', pseudoElement: '::view-transition-new(root)' },
+        );
+    }).catch(function () { /* 过渡被中断时无需处理，主题已应用 */ });
+}
+
+/** 应用明暗模式并保存偏好；切换期间关闭元素自身的颜色过渡，避免视图快照捕获中间态 */
+function applyColorScheme(scheme) {
+    const root = document.documentElement;
+    root.classList.add('theme-switching');
+    document.body.dataset.colorScheme = scheme;
+    root.dataset.colorScheme = scheme;
+    storeColorScheme(scheme);
     updateColorSchemeToggle();
+    requestAnimationFrame(function () { root.classList.remove('theme-switching'); });
 }
 
 function updateColorSchemeToggle() {
-    const btn = document.getElementById('theme-corner-toggle');
+    const btn = document.getElementById('theme-scheme-toggle');
     if (!btn) return;
     const scheme = document.body.dataset.colorScheme || 'light';
-    btn.textContent = scheme === 'dark' ? '☀' : '🌙';
     btn.title = scheme === 'dark' ? '切换浅色模式' : '切换暗色模式';
+    btn.setAttribute('aria-pressed', String(scheme === 'dark'));
 }
 
-// ===== 共享弹幕词库 =====
+// ===== 背景弹幕词库 =====
 const DANMAKU_DICT = [
-    '弹幕', 'Danmaku', 'Bullet Chat', 'Barrage', 'コメント',
-    'LogVar', '🚀', '🔥', '🎬', '✨', '💫', '🌸', '⭐', '📺',
-    '٩(◕‿◕｡)۶', '(≧▽≦)', '(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧',
-    '—=≡Σ((( つ•̀ω•́)つ', 'Σ(°△°|||)︴', '喵~',
-    '彈幕 API 已就绪', '弹幕即正义', '弹幕引擎运行中', '幕弹',
-    '前方高能', '高能预警', '空降成功', '爷青回', 'DNA动了',
-    '名场面', '进度条保命', '梦が始まる',
-    '你指尖跃动的电光', '是我此生不灭的信仰',
-    '教练我想打篮球', '这也在你的计算之中吗',
-    '恭喜你发现宝藏', '优雅永不过时',
-    'バレットチャット', 'Comment',
-    '芜湖', '好耶', '不愧是你', '血压起来了',
-    '草(一种植物)', '典中典', '绷不住了', '绝绝子', '撒花🎉',
-    '感谢大佬', 'PR 欢迎', 'Star 一下',
-    '鸽子', '豆佬', '一路走来', '摆烂 10',
-    '𝒏𝒆𝒌𝒐', 'sleep', 'Aurora', '🐳𝔀𝓭𝓷𝓶𝓵𝓰𝓫𝓭', 'mask',
-    '我勒个豆儿', '从', '比企谷 雪乃', '水东', '一只歌鸽子(半夜看到我叫我滚去睡觉',
-    '@huangxd-', '@wan0ge', '@woleigedouer', '@Wo254992', '@lilixu3',
-    '@Celestials316', '@dyphire', '@piaoyizy', '@xiaoQQya', '@liixing',
-    '@goodcommunication', '@Mr-Quin', '@chason-zhao', '@DemoJameson',
-    '@rinnein', '@Lampon', '@zcw199604', 'Mashiro', '@wade6716',
-    '请合理使用', '公益服务请适当调高缓存避免滥用',
-    '有弹幕才有氛围~', '弹幕陪你看', 'LogVar可能会倒闭但绝对不会变质',
+    // 常规流行语等
+    '弹幕', 'Danmaku', 'Bullet Chat', 'Barrage', 'Comment', 'コメント', 'バレットチャット', '幕弹', '弹幕引擎运行中', '彈幕 API 已就绪', '弹幕陪你看', '有弹幕才有氛围~', '弹幕即正义', '请合理使用', '公益服务请适当调高缓存避免滥用', '感谢大佬', 'PR 欢迎', 'Star 一下', 'LogVar', 'LogVar可能会倒闭但绝对不会变质', '(≧▽≦)', '(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧', 'Σ(°△°|||)︴', '٩(◕‿◕｡)۶', '—=≡Σ((( つ•̀ω•́)つ', '✨', '⭐', '🌸', '🎬', '💫', '📺', '🔥', '🚀', '抢沙发', '前排出售瓜子矿泉水', '潜水出来冒个泡', '酱紫啊', '太有才了', '膜拜大神', '火钳刘明', '神马都是浮云', '给力', '不管你信不信，反正我是信了', '矮油~', '哎哟，不错哦', '元芳，你怎么看', '233333', '666', '不明觉厉', '喜大普奔', '我和我的小伙伴们都惊呆了', '野生字幕君', '开口跪', '镇站之宝', '教练我想打篮球', '经费在燃烧', '你指尖跃动的电光', '是我此生不灭的信仰', '颜表立', '此生无悔入东方，来世愿生幻想乡', '梦が始まる', '战斗力只有5的渣渣', '马猴烧酒', '前方高能', '高能预警', '空降成功', '进度条保命', '战歌起', '正片开始', '名场面', '泪目', '见证历史', '撒花🎉', '完结撒花', '喵~', '这也在你的计算之中吗', '恭喜你发现宝藏', '囍', 'av170001', '真实', '下次一定', '你币有了', 'awsl', '注入灵魂', '神仙打架', '草(一种植物)', '不愧是你', '好耶', '爷青回', '芜湖', '血压起来了', 'DNA动了', '绷不住了', '绝绝子', '破防了', '优雅永不过时', '电子榨菜', '哈基米', '啊？', '命运的齿轮开始转动', '尊嘟假嘟', '硬控', '情绪价值', '电子布洛芬', 'city不city', '小孩哥', '小孩姐', 'Next Level', '上大分', '天命人', '广智救我', '接', '致敬', '何意味', '人生易如反掌', '淡人', '听劝', '真是一 pair 苦命鸳鸯啊', '谷子', '爱你老己', '生命力', '活人感', '敬自己一杯', '超绝松弛感', '顶级理解', '我的身材很曼妙', '是啊，吃什么', '恭喜爹可以称帝了！', '夯爆了', '班味消除', '中国人能飞', '中国人会飞', '牛来',
+    // TG 管理员与活跃人员
+    '鸽子', '豆佬', '@一路走来', '@摆烂 10','@𝒏𝒆𝒌𝒐', '@sleep', '@Aurora', '@🐳𝔀𝓭𝓷𝓶𝓵𝓰𝓫𝓭', '@mask','@我勒个豆儿', '@从', '@比企谷 雪乃', '@水东', '@一只歌鸽子(半夜看到我叫我滚去睡觉', '@狗剩', '@马牛逼',
+    // github 贡献者
+    '@huangxd-', '@wan0ge', '@woleigedouer', '@Wo254992', '@lilixu3','@Celestials316', '@dyphire', '@piaoyizy', '@xiaoQQya', '@liixing','@goodcommunication', '@Mr-Quin', '@chason-zhao', '@DemoJameson','@rinnein', '@Lampon', '@zcw199604', '@Mashiro000', '@wade6716','@xlmc', '@mz289', '@sugarbliss', '@Backsoon0', '@ynsen', '@karasushin', '@desmond9527',
 ];
 
-// 共享弹幕发射间隔 0.5~1.5s
+// 背景弹幕发射间隔 0.5~1.5s
 const DANMAKU_INTERVAL_MS = 500;
 
 // ===== 背景弹幕系统 =====
@@ -758,11 +778,11 @@ const DANMAKU_INTERVAL_MS = 500;
             'color:' + color,'opacity:' + opacity.toFixed(2),
             'pointer-events:none','user-select:none',
             'text-shadow:0 0 2px rgba(0,0,0,0.08), 0 0 6px currentColor',
-            'animation:danmakuScroll2 ' + duration + 's linear ' + delay + 's infinite',
+            'animation:danmakuScroll2 ' + duration + 's linear ' + delay + 's',
             'animation-fill-mode:backwards',
         ].join(';');
         container.appendChild(el);
-        setTimeout(() => { if (running) el.remove(); }, (duration + delay) * 1000 + 500);
+        el.addEventListener('animationend', () => el.remove());
     }
 
     function tick() {

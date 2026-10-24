@@ -1,8 +1,8 @@
 import { Globals } from './configs/globals.js';
 import { jsonResponse } from './utils/http-util.js';
 import { log, formatLogMessage } from './utils/log-util.js'
-import { getFavoriteCachesFromRedis, getRedisCaches, judgeRedisValid } from "./utils/redis-util.js";
-import { cleanupExpiredIPs, findUrlById, getCommentCache, getLocalCaches, judgeLocalCacheValid } from "./utils/cache-util.js";
+import { getFavoriteCachesFromRedis, judgeRedisValid, initializePersistentCaches } from "./utils/redis-util.js";
+import { cleanupExpiredIPs, findUrlById, getCommentCache, judgeLocalCacheValid } from "./utils/cache-util.js";
 import { formatDanmuResponse } from "./utils/danmu-util.js";
 import AIClient from './utils/ai-util.js';
 import { getBangumi, getComment, getCommentByUrl, getSegmentComment, matchAnime, searchAnime, searchEpisodes } from "./apis/dandan-api.js";
@@ -10,7 +10,8 @@ import { handleFavoriteAdd, handleFavoriteList, handleFavoriteRefresh, handleFav
 import { getFongmiDanmaku } from "./apis/clients/fongmi-api.js";
 import { handleConfig, handleUI, handleLogs, handleClearLogs, handleDeploy, handleClearCache, handleReqRecords, handleCacheAnimes } from "./apis/system-api.js";
 import { handleForwardTrace } from "./apis/forward-trace-api.js";
-import { handleSetEnv, handleAddEnv, handleDelEnv, handleAiVerify } from "./apis/env-api.js";
+import { handleSetEnv, handleAddEnv, handleDelEnv, handleAiVerify, handleDandanplayVerify } from "./apis/env-api.js";
+import { handleLocalDanmuUpload, handleLocalDanmuList, handleLocalDanmuGet, handleLocalDanmuDelete, handleLocalDanmuUpdate } from "./apis/local-danmu-api.js";
 import { extendBangumiDownloadLifecycle } from "./utils/bangumi-data-util.js";
 import { Segment } from "./models/dandan-model.js"
 import {
@@ -71,7 +72,7 @@ async function handleRequest(req, env, deployPlatform, clientIp) {
   // --- 校验 token ---
   const parts = path.split("/").filter(Boolean); // 去掉空段
 
-  const knownApiPaths = ["api", "v1", "v2", "search", "match", "favorite", "bangumi", "comment", "danmaku"];
+  const knownApiPaths = ["api", "v1", "v2", "search", "match", "favorite", "bangumi", "comment", "danmaku", "local-danmu"];
 
   const firstPart = parts[0] || "";
   const isDefaultToken = globals.token === "87654321";
@@ -107,19 +108,19 @@ async function handleRequest(req, env, deployPlatform, clientIp) {
     }
   }
 
-  if (deployPlatform === "node" && globals.localCacheValid && path !== "/favicon.ico" && path !== "/robots.txt") {
-    await getLocalCaches();
-  }
-  if (globals.redisValid && path !== "/favicon.ico" && path !== "/robots.txt") {
-    await getRedisCaches();
-  }
-  // serverless 多实例下，收藏请求每次都从 Redis 刷新收藏缓存，避免读到预热实例的过期空快照
-  if (globals.redisValid && deployPlatform !== "node" && path.includes("/favorite")) {
-    await getFavoriteCachesFromRedis();
-  }
-  if (deployPlatform === "node" && globals.localRedisValid && path !== "/favicon.ico" && path !== "/robots.txt") {
-    const { getLocalRedisCaches } = await import("./utils/local-redis-util.js");
-    await getLocalRedisCaches();
+  if (path !== '/favicon.ico' && path !== '/robots.txt' && method !== 'OPTIONS') {
+    const persistentCachesReady = await initializePersistentCaches(deployPlatform);
+    let favoriteReadSucceeded = true;
+    if (globals.redisValid && deployPlatform !== 'node' && isFavoriteRequest) {
+      favoriteReadSucceeded = await getFavoriteCachesFromRedis();
+    }
+    if (isFavoriteRequest && !isFavoriteListRequest && (
+      !persistentCachesReady || !favoriteReadSucceeded || (globals.redisUrl && globals.redisToken && globals.favoriteCacheWritable.upstash === false)
+      || (globals.localCacheValid && globals.favoriteCacheWritable.file === false)
+      || (deployPlatform !== 'node' && globals.redisUrl && globals.redisToken && !globals.redisValid)
+    )) {
+      return jsonResponse({ success: false, message: '收藏缓存暂时无法读取，本次修改未执行，请稍后重试' }, 503);
+    }
   }
 
   // 检查路径是否包含指定的接口关键字
@@ -274,6 +275,24 @@ async function handleRequest(req, env, deployPlatform, clientIp) {
     return handleConfig(true); // 有权限
   }
 
+  const isLocalDanmuUpload = (path === '/api/local-danmu/upload' || path === '/api/v2/local-danmu/upload') && method === 'POST';
+  const isLocalDanmuList = (path === '/api/local-danmu/list' || path === '/api/v2/local-danmu/list') && method === 'GET';
+  const localResourceMatch = path.match(/^\/api(?:\/v2)?\/local-danmu\/([^/]+)$/);
+  if (isLocalDanmuUpload || isLocalDanmuList || (localResourceMatch && (method === 'GET' || method === 'DELETE' || method === 'PATCH'))) {
+    const isAdmin = !!globals.adminToken && globals.currentToken === globals.adminToken;
+    const isUser = !!globals.token && globals.currentToken === globals.token;
+    if (!isAdmin && !isUser) return jsonResponse({ errorCode: 401, success: false, errorMessage: 'Unauthorized' }, 401);
+    if ((isLocalDanmuUpload || method === 'DELETE' || method === 'PATCH') && !isAdmin && !globals.localDanmuNotRequireAdmin) {
+      return jsonResponse({ errorCode: 403, success: false, errorMessage: 'Local danmu upload and deletion require ADMIN_TOKEN or LOCAL_DANMU_NOT_REQUIRE_ADMIN=true' }, 403);
+    }
+    if (isLocalDanmuUpload) return handleLocalDanmuUpload(req);
+    if (isLocalDanmuList) return handleLocalDanmuList();
+    const key = decodeURIComponent(localResourceMatch[1]);
+    if (method === 'GET') return handleLocalDanmuGet(key);
+    if (method === 'PATCH') return handleLocalDanmuUpdate(req, key);
+    return handleLocalDanmuDelete(key);
+  }
+
   // GET /api/reqrecords - 获取请求记录 (需要 token)
   if (path === "/api/reqrecords" && method === "GET") {
     return handleReqRecords();
@@ -286,7 +305,8 @@ async function handleRequest(req, env, deployPlatform, clientIp) {
     && !path.startsWith('/api/deploy') && !path.startsWith('/api/cache')
     && !path.startsWith('/api/cookie') && !path.startsWith('/api/config')
     && !path.startsWith('/api/favorite')
-    && !path.startsWith('/api/ai') && !path.startsWith('/api/debug')) {
+    && !path.startsWith('/api/ai') && !path.startsWith('/api/nipaplay')
+    && !path.startsWith('/api/debug') && !path.startsWith('/api/local-danmu')) {
       log("info", `[system] [path check] Starting path normalization for: "${path}"`);
       const pathBeforeCleanup = path; // 保存清理前的路径检查是否修改
 
@@ -311,7 +331,8 @@ async function handleRequest(req, env, deployPlatform, clientIp) {
         && !path.startsWith('/api/env') && !path.startsWith('/api/cache')
         && !path.startsWith('/api/cookie') && !path.startsWith('/api/config')
         && !path.startsWith('/api/favorite')
-        && !path.startsWith('/api/ai') && !path.startsWith('/api/debug')) {
+        && !path.startsWith('/api/ai') && !path.startsWith('/api/nipaplay')
+        && !path.startsWith('/api/debug') && !path.startsWith('/api/local-danmu')) {
           if (path.startsWith('/v2/') || path === '/v2') {
               log("info", `[system] [path check] Path is missing /api prefix. Adding /api...`);
               path = '/api' + path;
@@ -618,6 +639,11 @@ async function handleRequest(req, env, deployPlatform, clientIp) {
   // POST /api/ai/verify - 验证AI连通性
   if (path === "/api/ai/verify" && method === "POST") {
     return handleAiVerify(req);
+  }
+
+  // POST /api/nipaplay/verify - 验证弹弹play账号连通性
+  if (path === "/api/nipaplay/verify" && method === "POST") {
+    return handleDandanplayVerify(req);
   }
 
   return jsonResponse({ message: "Not found" }, 404);

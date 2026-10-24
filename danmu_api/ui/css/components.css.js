@@ -1,6 +1,36 @@
 // language=CSS
 export const componentsCssContent = /* css */ `
-/* 组件样式 — 参照 Bangumi-syncer ACG 设计系统 */
+/* 组件样式 — 参照 Bangumi-syncer 柔和圆角设计风格 */
+
+/* ============ 图标 ============ */
+/* 统一线性图标：尺寸随字号（1em），描边取 currentColor */
+.ui-icon-sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+.ui-icon {
+    display: inline-block;
+    flex: none;
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+}
+
+/* GitHub 标识：官方实心图形，固定 14px 显示 */
+.ui-icon.github-icon {
+    width: 14px;
+    height: 14px;
+}
+
+/* 图标与文字成对出现时的对齐容器（flex 居中） */
+.ui-icon-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+}
 
 /* ============ 标签导航 ============ */
 .nav-buttons {
@@ -152,7 +182,10 @@ export const componentsCssContent = /* css */ `
     font-size: 13px;
     font-weight: 500;
     transition: all 0.22s var(--app-ease-smooth);
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     text-align: center;
     line-height: 1.4;
 }
@@ -174,8 +207,8 @@ export const componentsCssContent = /* css */ `
 
 .favorite-action-btn:disabled,
 .favorite-action-btn:disabled:hover,
-body[data-theme] .favorite-action-btn:disabled,
-body[data-theme] .favorite-action-btn:disabled:hover {
+:is(html, body)[data-theme] .favorite-action-btn:disabled,
+:is(html, body)[data-theme] .favorite-action-btn:disabled:hover {
     background: #d1d5db !important;
     color: #6b7280 !important;
     border-color: #d1d5db !important;
@@ -225,8 +258,8 @@ body[data-theme] .favorite-action-btn:disabled:hover {
 
 .favorite-schedule-btn:disabled,
 .favorite-schedule-btn:disabled:hover,
-body[data-theme] .favorite-schedule-btn:disabled,
-body[data-theme] .favorite-schedule-btn:disabled:hover {
+:is(html, body)[data-theme] .favorite-schedule-btn:disabled,
+:is(html, body)[data-theme] .favorite-schedule-btn:disabled:hover {
     background: #d1d5db !important;
     color: #6b7280 !important;
     border-color: #d1d5db !important;
@@ -248,6 +281,239 @@ body[data-theme] .favorite-schedule-btn:disabled:hover {
 
 .favorite-list {
     margin-top: 8px;
+}
+
+.local-danmu-file-field input[type="file"] {
+    min-height: 48px;
+    padding: 6px;
+    border-radius: var(--app-radius-btn);
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.local-danmu-file-field input[type="file"]::file-selector-button {
+    margin-right: 12px;
+    padding: 9px 18px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--theme-accent), var(--theme-accent-hover));
+    color: #ffffff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 6px var(--theme-accent-soft);
+    transition: filter 0.2s ease, box-shadow 0.2s ease;
+}
+
+.local-danmu-file-field input[type="file"]::file-selector-button:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 3px 10px var(--theme-accent-soft);
+}
+
+.local-danmu-file-field input[type="file"]::file-selector-button:active {
+    filter: brightness(0.96);
+}
+
+.local-danmu-file-hint {
+    margin: 7px 0 0;
+    color: var(--theme-muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.local-danmu-fields {
+    display: grid;
+    grid-template-columns: minmax(190px, 2fr) repeat(4, minmax(100px, 1fr)) auto;
+    align-items: end;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.local-danmu-fields[data-batch="true"] {
+    grid-template-columns: minmax(190px, 2fr) repeat(3, minmax(100px, 1fr)) auto;
+}
+
+.local-danmu-fields .form-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+    min-width: 0;
+}
+
+.local-danmu-fields .form-group[hidden] {
+    display: none;
+}
+
+.local-danmu-fields .form-group label {
+    min-height: 18px;
+    margin-bottom: 6px;
+    line-height: 18px;
+    white-space: nowrap;
+}
+
+.local-danmu-fields .form-group input,
+.local-danmu-fields .form-group select {
+    box-sizing: border-box;
+    width: 100%;
+    height: 42px;
+    min-height: 42px;
+    margin: 0;
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.local-danmu-fields select {
+    cursor: pointer;
+}
+
+.local-danmu-fields > button {
+    height: 42px;
+    min-height: 42px;
+}
+
+.local-danmu-batch-preview {
+    margin-top: 12px;
+}
+
+#local-danmu-upload-status {
+    overflow-wrap: anywhere;
+}
+
+.local-danmu-batch-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 90px minmax(120px, 0.65fr);
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--theme-border);
+}
+
+.local-danmu-batch-file {
+    min-width: 0;
+}
+
+.local-danmu-batch-episode {
+    margin: 0;
+}
+
+.local-danmu-batch-status {
+    color: var(--theme-muted);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+    .local-danmu-batch-row {
+        grid-template-columns: minmax(0, 1fr) 90px;
+    }
+    .local-danmu-batch-status {
+        grid-column: 1 / -1;
+    }
+}
+
+.local-danmu-search {
+    max-width: 480px;
+    margin: 18px 0 12px;
+}
+
+.local-danmu-group {
+    margin-bottom: 12px;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--app-radius-card-sm);
+    background: var(--theme-input-bg);
+    overflow: hidden;
+}
+
+.local-danmu-group > summary {
+    padding: 14px 16px;
+    cursor: pointer;
+    color: var(--theme-text);
+    overflow-wrap: anywhere;
+}
+
+.local-danmu-group-actions {
+    display: flex;
+    gap: 8px;
+    margin: 0 16px 8px 34px;
+}
+
+.local-danmu-group > summary::marker {
+    color: var(--theme-accent);
+}
+
+.local-danmu-group[open] > summary {
+    border-bottom: 1px solid var(--theme-border);
+}
+
+.local-danmu-group-title {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.local-danmu-group-meta,
+.local-danmu-group-count {
+    display: block;
+    margin: 5px 0 0 18px;
+    font-size: 12px;
+    color: var(--theme-muted);
+}
+
+.local-danmu-episodes {
+    margin: 8px 16px 12px 34px;
+    padding: 0 0 0 16px;
+    border-left: 2px solid var(--theme-border);
+}
+
+.local-danmu-episode {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--theme-border);
+}
+
+.local-danmu-episode:last-child {
+    border-bottom: 0;
+}
+
+.local-danmu-episode-info {
+    min-width: 0;
+    margin-left: 12px;
+}
+
+.local-danmu-episode-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--theme-text);
+}
+
+.local-danmu-filename,
+.local-danmu-episode-meta {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--theme-muted);
+    overflow-wrap: anywhere;
+}
+
+.local-danmu-episode-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
+}
+
+@media (max-width: 960px) {
+    .local-danmu-fields,
+    .local-danmu-fields[data-batch="true"] {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .local-danmu-name-field,
+    .local-danmu-fields > button {
+        grid-column: 1 / -1;
+    }
 }
 
 .btn-primary {
@@ -534,7 +800,7 @@ body[data-theme] .favorite-schedule-btn:disabled:hover {
     display: grid;
     place-items: center;
     color: var(--theme-muted);
-    font-size: 24px;
+    font-size: 16px;
     line-height: 1;
 }
 
@@ -545,7 +811,7 @@ body[data-theme] .favorite-schedule-btn:disabled:hover {
 .preview-group-heading {
     min-height: 32px;
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: 10px;
     padding: 0 2px 8px;
@@ -655,6 +921,9 @@ body[data-theme] .favorite-schedule-btn:disabled:hover {
 
 .preview-copy-btn {
     padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-size: 16px;
 }
 
@@ -686,6 +955,7 @@ body[data-theme] .favorite-schedule-btn:disabled:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-top: 14px;
     margin-bottom: 12px;
     flex-wrap: wrap;
     gap: 8px;
@@ -970,8 +1240,39 @@ body.modal-open {
     font-size: 13px;
 }
 
-/* 通用复选框：appearance 自绘控制勾选色；body[data-theme] 前缀将特异性提至 3002，压过 .form-group input 的背景/边框(2002)与尺寸/内边距(1001) */
-body[data-theme] input[type="checkbox"].app-checkbox {
+/* ============ 首屏占位骨架 ============ */
+/* 数据未就绪时以扫光条占位，避免内容由空到满的跳动 */
+.skeleton-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.skeleton-line {
+    height: 12px;
+    border-radius: var(--app-radius-card-sm);
+    background: linear-gradient(90deg, var(--theme-panel-bg) 25%, var(--theme-panel-strong) 37%, var(--theme-panel-bg) 63%);
+    background-size: 400% 100%;
+    animation: skeletonSweep 1.4s ease-in-out infinite;
+}
+
+.skeleton-stack .skeleton-line:nth-child(2) { width: 88%; }
+.skeleton-stack .skeleton-line:nth-child(3) { width: 72%; }
+
+@keyframes skeletonSweep {
+    from { background-position: 100% 50%; }
+    to { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton-line {
+        animation: none;
+    }
+}
+
+/* 通用复选框：appearance 自绘控制勾选色；:is(html, body)[data-theme] 前缀将特异性提至 3002，压过 .form-group input 的背景/边框(2002)与尺寸/内边距(1001) */
+:is(html, body)[data-theme] input[type="checkbox"].app-checkbox {
     width: 16px;
     height: 16px;
     margin: 0;
@@ -987,12 +1288,12 @@ body[data-theme] input[type="checkbox"].app-checkbox {
     border-radius: 3px;
 }
 
-body[data-theme] input[type="checkbox"].app-checkbox:checked {
+:is(html, body)[data-theme] input[type="checkbox"].app-checkbox:checked {
     background: var(--theme-accent);
     border-color: var(--theme-accent);
 }
 
-body[data-theme] input[type="checkbox"].app-checkbox:checked::after {
+:is(html, body)[data-theme] input[type="checkbox"].app-checkbox:checked::after {
     content: "";
     position: absolute;
     left: 5px;
@@ -1004,7 +1305,7 @@ body[data-theme] input[type="checkbox"].app-checkbox:checked::after {
     transform: rotate(45deg);
 }
 
-body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
+:is(html, body)[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
     outline: 2px solid var(--theme-accent-soft);
     outline-offset: 1px;
 }
@@ -1340,50 +1641,18 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
     justify-content: center;
 }
 
-/* ============ Bilibili Cookie ============ */
-.bili-cookie-editor {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-}
-
-.bili-cookie-status {
-    background: var(--theme-panel-bg);
-    padding: 12px;
-    border-radius: var(--app-radius-card-sm);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border-left: 3px solid var(--theme-accent);
-}
-
-.bili-status-icon {
-    font-size: 18px;
-}
-
-.bili-status-text {
-    flex: 1;
-    font-weight: 500;
-    font-size: 13px;
-}
-
-.bili-cookie-actions {
-    display: flex;
-    gap: 8px;
-}
-
 /* ============ 多选标签 & 合并模式 ============ */
 .selected-tag {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     background: linear-gradient(135deg, var(--theme-accent), var(--theme-accent-hover));
     color: #ffffff;
-    padding: 6px 12px;
-    border-radius: 999px;
+    padding: 8px 12px;
+    border-radius: 20px;
     cursor: move;
     user-select: none;
-    transition: all 0.22s var(--app-ease-smooth);
+    transition: all 0.3s;
     font-size: 13px;
     font-weight: 500;
     max-width: 100%;
@@ -1391,16 +1660,17 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
     white-space: normal;
     word-break: break-all;
     line-height: 1.4;
+    touch-action: none;
 }
 
 .selected-tag:hover {
     filter: brightness(1.05);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
 }
 
 .selected-tag.dragging {
     opacity: 0.5;
-    transform: rotate(3deg);
+    transform: rotate(5deg);
 }
 
 .selected-tag .tag-text {
@@ -1408,8 +1678,8 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
 }
 
 .selected-tag .remove-btn {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     background: rgba(255, 255, 255, 0.3);
     border: none;
     border-radius: 50%;
@@ -1418,34 +1688,35 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 14px;
+    font-weight: bold;
     transition: all 0.2s;
+    touch-action: manipulation;
 }
 
 .selected-tag .remove-btn:hover {
     background: rgba(255, 255, 255, 0.5);
-    transform: scale(1.1) rotate(90deg);
+    transform: scale(1.1);
 }
 
 .merge-mode-controls {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin: 8px 0;
+    gap: 10px;
+    margin: 10px 0;
 }
 
 .merge-mode-btn {
-    padding: 5px 12px;
+    padding: 6px 12px;
     background: var(--theme-panel-strong);
     border: 1px solid var(--theme-border);
-    border-radius: 999px;
+    border-radius: 20px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 13px;
     display: flex;
     align-items: center;
-    gap: 4px;
-    transition: all 0.22s var(--app-ease-smooth);
+    gap: 5px;
+    transition: all 0.3s;
     color: var(--theme-muted);
     font-weight: 500;
 }
@@ -1454,7 +1725,7 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
     background: var(--theme-accent-soft);
     border-color: var(--theme-accent);
     color: var(--theme-accent);
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .merge-mode-btn:hover {
@@ -1465,15 +1736,15 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
     display: none;
     background: var(--theme-accent-soft);
     border: 2px dashed rgba(var(--app-primary-rgb), 0.25);
-    border-radius: var(--app-radius-card-sm);
+    border-radius: 8px;
     padding: 10px;
-    margin-bottom: 14px;
+    margin-bottom: 15px;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
-    min-height: 48px;
+    min-height: 52px;
     position: relative;
-    transition: all 0.22s var(--app-ease-smooth);
+    transition: all 0.3s;
 }
 
 .staging-area.active {
@@ -1487,23 +1758,23 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
 }
 
 .staging-area::before {
-    content: '合并组暂存区';
+    content: '合并组暂存区:';
     color: var(--theme-accent);
-    font-size: 11px;
-    font-weight: 700;
-    margin-right: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    margin-right: 5px;
 }
 
 .staging-tag {
-    background: var(--theme-container-bg);
+    background: var(--theme-input-bg);
     color: var(--theme-accent);
     border: 1px solid rgba(var(--app-primary-rgb), 0.2);
     padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 12px;
+    border-radius: 15px;
+    font-size: 13px;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     cursor: move;
     user-select: none;
     max-width: 100%;
@@ -1528,8 +1799,8 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
 .staging-tag .remove-btn {
     color: #e0707a;
     cursor: pointer;
-    font-weight: 700;
-    font-size: 13px;
+    font-weight: bold;
+    font-size: 14px;
     display: inline-block;
     transition: transform 0.22s var(--app-ease-smooth);
 }
@@ -1540,7 +1811,7 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
 
 .staging-separator {
     color: var(--theme-muted);
-    font-weight: 700;
+    font-weight: bold;
 }
 
 .confirm-merge-btn {
@@ -1555,47 +1826,51 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 2px 6px rgba(82, 166, 125, 0.25);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     transition: box-shadow 0.22s var(--app-ease-smooth), filter 0.22s var(--app-ease-smooth), transform 0.22s var(--app-ease-smooth) !important;
 }
 
 .confirm-merge-btn:hover {
     filter: brightness(1.1);
     transform: scale(1.1);
+    background: #459670;
 }
 
 .confirm-merge-btn:disabled {
     background: var(--theme-panel-strong);
+    color: var(--theme-muted);
     cursor: not-allowed;
     box-shadow: none;
+    transform: none;
 }
 
 .available-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
     margin-top: 8px;
 }
 
 .available-tag {
-    padding: 5px 12px;
-    background: var(--theme-input-bg);
-    border: 1px solid var(--theme-border);
-    border-radius: 999px;
+    padding: 8px 16px;
+    background: var(--theme-panel-strong);
+    border: 2px solid transparent;
+    border-radius: 20px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.3s;
     user-select: none;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
 }
 
 .available-tag:hover {
     border-color: var(--theme-accent);
-    background: var(--theme-accent-soft);
+    background: var(--theme-panel-bg);
+    transform: translateY(-2px);
 }
 
 .available-tag.disabled {
-    opacity: 0.4;
+    opacity: 0.5;
     cursor: not-allowed;
     pointer-events: none;
 }
@@ -1692,11 +1967,6 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
     padding-bottom: 0;
 }
 
-.record-timestamp::before {
-    content: '\\1F550';
-    font-size: 14px;
-}
-
 .record-params {
     background: var(--theme-panel-strong);
     border-radius: var(--app-radius-card-sm);
@@ -1711,11 +1981,6 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
     display: flex;
     align-items: center;
     gap: 6px;
-}
-
-.record-params-title::before {
-    content: '\\1F4CB';
-    font-size: 14px;
 }
 
 .record-params pre {
@@ -2213,7 +2478,9 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
     color: var(--theme-muted);
     transition: all 0.22s var(--app-ease-smooth);
     margin-bottom: 14px;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .btn-back:hover {
@@ -2562,7 +2829,7 @@ body[data-theme] input[type="checkbox"].app-checkbox:focus-visible {
 }
 
 /* ============ 暗色模式特殊处理 ============ */
-body[data-theme$="-dark"] .heatmap-bar {
+:is(html, body)[data-theme$="-dark"] .heatmap-bar {
     filter: brightness(0.9);
 }
 
@@ -2825,14 +3092,18 @@ body[data-theme$="-dark"] .heatmap-bar {
     border-radius: 8px;
 }
 
-/* ============ AI API Key 编辑器 ============ */
-.ai-apikey-editor {
+/* ============ 凭证编辑器（AI API Key / 弹弹play密码 / B站 Cookie 共用） ============ */
+.ai-apikey-editor,
+.dandanplay-editor,
+.bili-cookie-editor {
     display: flex;
     flex-direction: column;
     gap: 14px;
 }
 
-.ai-apikey-status {
+.ai-apikey-status,
+.dandanplay-status,
+.bili-cookie-status {
     background: var(--theme-panel-bg);
     padding: 12px;
     border-radius: var(--app-radius-card-sm);
@@ -2842,17 +3113,23 @@ body[data-theme$="-dark"] .heatmap-bar {
     border-left: 3px solid var(--theme-accent);
 }
 
-.ai-status-icon {
+.ai-status-icon,
+.dandanplay-status-icon,
+.bili-status-icon {
     font-size: 18px;
 }
 
-.ai-status-text {
+.ai-status-text,
+.dandanplay-status-text,
+.bili-status-text {
     flex: 1;
     font-weight: 500;
     font-size: 13px;
 }
 
-.ai-apikey-actions {
+.ai-apikey-actions,
+.dandanplay-actions,
+.bili-cookie-actions {
     display: flex;
     gap: 8px;
 }

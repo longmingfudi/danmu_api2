@@ -44,7 +44,7 @@ const previewGroupDefinitions = {
     ],
     match: [
         { name: '匹配策略', keys: ['PLATFORM_ORDER', 'STRICT_TITLE_MATCH', 'ENABLE_ANIME_EPISODE_FILTER'] },
-        { name: '标题处理', keys: ['ANIME_TITLE_FILTER', 'EPISODE_TITLE_FILTER', 'TITLE_TO_CHINESE', 'ANIME_TITLE_SIMPLIFIED', 'TITLE_MAPPING_TABLE', 'AUTO_MATCH_MAPPING_TABLE', 'TITLE_NOISE_FILTER'] },
+        { name: '标题处理', keys: ['ANIME_TITLE_FILTER', 'EPISODE_TITLE_FILTER', 'TITLE_TO_CHINESE', 'ANIME_TITLE_SIMPLIFIED', 'TITLE_MAPPING_TABLE', 'TITLE_MAPPING_TABLE_URL', 'AUTO_MATCH_MAPPING_TABLE', 'AUTO_MATCH_MAPPING_TABLE_URL', 'TITLE_NOISE_FILTER'] },
         { name: 'AI 匹配', keys: ['AI_BASE_URL', 'AI_MODEL', 'AI_API_KEY', 'AI_MATCH_PROMPT'] },
         { name: '动画元数据', keys: ['USE_BANGUMI_DATA'] }
     ],
@@ -357,9 +357,10 @@ function clearPreviewSearch(shouldRender = true) {
     }
 }
 
+// 折叠取值供配置预览与接口详情共用：按 aria-controls 定位目标，避免依赖具体容器结构
 function togglePreviewValue(button) {
-    const item = button.closest('.preview-item');
-    const value = item ? item.querySelector('.preview-value') : null;
+    const id = button.getAttribute('aria-controls');
+    const value = id ? document.getElementById(id) : null;
     if (!value) return;
 
     const willExpand = value.classList.contains('is-collapsed');

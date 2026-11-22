@@ -8,7 +8,7 @@ import zlib from 'zlib';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import dotenv from 'dotenv';
 import { Request as NodeFetchRequest } from 'node-fetch';
-import { handleRequest } from './worker.js';
+import { handleRequestWithTrace } from './worker.js';
 import { Globals, globals } from './configs/globals.js';
 import { Envs } from './configs/envs.js';
 import { clearBangumiDataCache, initBangumiData, syncBangumiDataLifecycleOnConfigChange } from './utils/bangumi-data-util.js';
@@ -17,6 +17,7 @@ import { persistFavorites, refreshFavoriteByKeyword } from './apis/favorite-api.
 import { startFavoriteScheduler, stopFavoriteScheduler } from './utils/favorite-schedule-util.js';
 import { formatHostForUrl, listenOnAllInterfaces } from './utils/server-listen-util.js';
 import { ensureRemoteTitleMapping } from './utils/remote-title-mapping-util.js';
+import { ensureRemoteAutoMatchMapping } from './utils/auto-match-mapping-url-util.js';
 
 // 读取 Node HTTP 请求体的原始字节，避免多字节字符和上传文件在分块读取时被破坏。
 async function readRequestBody(req) {
@@ -241,6 +242,9 @@ async function setupEnvWatcher() {
           console.log('[server] Environment variables reloaded successfully');
           console.log('[server] Updated keys:', Array.from(newEnvKeys).join(', '));
 
+          globals.reInit();
+          void ensureRemoteAutoMatchMapping();
+
           // 配置变更后同步 Bangumi Data 生命周期：开启则立即确保缓存就绪（缺失则下载），
           // 关闭则释放缓存；先按真实配置同步内存开关，避免重载未刷新 globals 时状态滞后
           const bangumiEnabled = process.env.USE_BANGUMI_DATA === 'true' || process.env.USE_BANGUMI_DATA === true;
@@ -358,7 +362,7 @@ function createServer() {
       });
 
       // 调用核心处理函数，并标识当前部署平台
-      const webResponse = await handleRequest(webRequest, process.env, detectNodeDeployPlatform(), clientIp);
+      const webResponse = await handleRequestWithTrace(webRequest, process.env, detectNodeDeployPlatform(), clientIp);
 
       // 将 Web API Response 对象转换为 Node.js 响应
       res.statusCode = webResponse.status;
@@ -548,6 +552,7 @@ async function startServer() {
 async function initializeNodeServices(mainPort) {
   Globals.deployPlatform = 'node';
   await ensureRemoteTitleMapping();
+  await ensureRemoteAutoMatchMapping();
   await initializeFavoriteScheduler(mainPort);
 }
 
